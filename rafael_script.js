@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar dataLayer para GTM
+    window.dataLayer = window.dataLayer || [];
+    
     // Animações e interatividade
     initAnimations();
     initButtonEffects();
@@ -49,41 +52,60 @@ function initAnimations() {
 
 // Inicializar efeitos de botões
 function initButtonEffects() {
-    const buttons = document.querySelectorAll('.cta-button');
+    const buttons = document.querySelectorAll('.cta-button, .feature-box, .benefit-card');
     
     buttons.forEach(button => {
-        // Efeito de hover em dispositivos móveis
-        button.addEventListener('touchstart', function() {
-            this.classList.add('touch-active');
+        // Efeito de hover
+        button.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.boxShadow = '0 10px 20px rgba(0, 0, 0, 0.2)';
         });
         
-        button.addEventListener('touchend', function() {
-            this.classList.remove('touch-active');
+        button.addEventListener('mouseleave', function() {
+            this.style.transform = '';
+            this.style.boxShadow = '';
+        });
+        
+        // Efeito de clique
+        button.addEventListener('mousedown', function() {
+            this.style.transform = 'scale(0.98)';
+        });
+        
+        button.addEventListener('mouseup', function() {
+            this.style.transform = '';
         });
     });
 }
 
 // Inicializar efeitos de scroll
 function initScrollEffects() {
-    window.addEventListener('scroll', function() {
-        const scrollPosition = window.scrollY;
+    // Elementos que aparecem com o scroll
+    const elementsToShow = document.querySelectorAll('.feature-box, .benefit-card');
+    
+    // Configurar estilo inicial
+    elementsToShow.forEach(element => {
+        element.style.opacity = '0';
+        element.style.transform = 'translateY(20px)';
+        element.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    });
+    
+    // Função para verificar posição e mostrar elementos
+    function checkPosition() {
+        const windowHeight = window.innerHeight;
         
-        // Parallax para elementos de fundo
-        document.body.style.backgroundPosition = `center ${scrollPosition * 0.05}px`;
-        
-        // Revelar elementos quando estiverem visíveis
-        const elementsToReveal = document.querySelectorAll('.feature-box, .benefit-card');
-        
-        elementsToReveal.forEach(element => {
+        elementsToShow.forEach(element => {
             const elementPosition = element.getBoundingClientRect().top;
-            const windowHeight = window.innerHeight;
             
             if (elementPosition < windowHeight - 100) {
                 element.style.opacity = '1';
                 element.style.transform = 'translateY(0)';
             }
         });
-    });
+    }
+    
+    // Verificar posição inicial e adicionar listener para scroll
+    checkPosition();
+    window.addEventListener('scroll', checkPosition);
 }
 
 // Inicializar partículas de fundo
@@ -131,23 +153,18 @@ function createParticle(container) {
 }
 
 // Animar uma partícula
-function animateParticle(particle, posX, posY, speedX, speedY) {
-    let x = posX;
-    let y = posY;
-    
+function animateParticle(particle, x, y, speedX, speedY) {
     function update() {
         // Atualizar posição
         x += speedX;
         y += speedY;
         
-        // Verificar limites
-        if (x < 0 || x > 100) {
-            x = Math.max(0, Math.min(100, x));
+        // Verificar limites e inverter direção se necessário
+        if (x <= 0 || x >= 100) {
             speedX = -speedX;
         }
         
-        if (y < 0 || y > 100) {
-            y = Math.max(0, Math.min(100, y));
+        if (y <= 0 || y >= 100) {
             speedY = -speedY;
         }
         
@@ -162,18 +179,66 @@ function animateParticle(particle, posX, posY, speedX, speedY) {
     update();
 }
 
-// Rastrear cliques nos botões para Facebook Pixel
+// Função para obter parâmetros da URL
+function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    const results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+}
+
+// Rastrear cliques nos botões e enviar dados para o n8n antes de redirecionar
 function trackButtonClicks() {
     const ctaButtons = document.querySelectorAll('.cta-button');
     
     ctaButtons.forEach(button => {
         button.addEventListener('click', function(e) {
-            // Rastrear evento de clique no Facebook Pixel
+            e.preventDefault(); // Prevenir o comportamento padrão do link
+            
+            // URL de destino do Telegram
+            const telegramUrl = this.getAttribute('href');
+            
+            // Rastrear evento de clique no Facebook Pixel (Lead)
             if (typeof fbq === 'function') {
                 fbq('track', 'Lead', {
-                    content_name: 'Rafael Invest - Telegram Group',
+                    content_name: 'Rafael Invest - Grupo de Lives',
                     content_category: 'Telegram Subscription'
                 });
+            }
+            
+            // Obter o parâmetro fbclid da URL
+            const fbclid = getUrlParameter('fbclid');
+            
+            // Dados para enviar ao n8n
+            const data = {
+                expert: 'rafaelinvest',
+                fbclid: fbclid
+            };
+            
+            // Endpoint do n8n
+            const n8nEndpoint = 'https://whkn8n.meumenu2023.uk/webhook/fbclid-landingpage';
+            
+            // Enviar dados para o n8n via POST apenas se houver fbclid
+            if (fbclid) {
+                fetch(n8nEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                    mode: 'no-cors'
+                })
+                .then(response => {
+                    // Redirecionar para o Telegram após o envio dos dados
+                    window.location.href = telegramUrl;
+                })
+                .catch(error => {
+                    // Em caso de erro, redirecionar mesmo assim
+                    window.location.href = telegramUrl;
+                });
+            } else {
+                // Se não houver fbclid, apenas redirecionar para o Telegram
+                window.location.href = telegramUrl;
             }
             
             // Adicionar efeito visual ao clicar
@@ -205,9 +270,9 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         const targetElement = document.querySelector(targetId);
         
         if (targetElement) {
-            window.scrollTo({
-                top: targetElement.offsetTop,
-                behavior: 'smooth'
+            targetElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
             });
         }
     });
